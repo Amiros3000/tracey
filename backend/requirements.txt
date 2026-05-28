@@ -1,0 +1,28 @@
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# Database — SQLCipher encrypted SQLite
+# IMPORTANT: requires system library first:
+#   Ubuntu/Debian: sudo apt-get install libsqlcipher-dev
+#   macOS:         brew install sqlcipher
+sqlcipher3==0.5.3
+
+# Auth
+bcrypt==4.2.1
+PyJWT==2.10.1
+
+# Environment
+python-dotenv==1.0.1
+
+# Data validation
+pydantic==2.10.3
+
+# AI — Claude API
+anthropic==0.40.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# Form data / file uploads (needed by FastAPI for multipart)
+python-multipart==0.0.18
