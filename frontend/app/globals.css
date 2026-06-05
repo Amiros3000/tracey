@@ -27,7 +27,7 @@
   --danger:  #EF4444;
 
   --sidebar-width:     220px;
-  --bottom-nav-height: 80px;
+  --bottom-nav-height: calc(64px + env(safe-area-inset-bottom));
 }
 
 /* ─── Design tokens — dark mode ──────────────────────────────────────────── */

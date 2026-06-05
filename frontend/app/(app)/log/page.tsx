@@ -280,7 +280,7 @@ function LogPageInner() {
         .log-success { animation: popIn 0.2s ease; }
       `}</style>
 
-      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - var(--bottom-nav-height, 80px))' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: isDesktop ? 'calc(100dvh - 48px)' : 'auto' }}>
 
         {/* Date navigation */}
         <div style={{
@@ -323,7 +323,7 @@ function LogPageInner() {
         </div>
 
         {/* Main content */}
-        <div style={{ flex: 1, overflowY: 'auto', display: isDesktop ? 'grid' : 'flex', gridTemplateColumns: isDesktop ? '1fr 1fr' : undefined, flexDirection: isDesktop ? undefined : 'column', gap: 0 }}>
+        <div style={{ flex: 1, overflowY: isDesktop ? 'auto' : 'visible', display: isDesktop ? 'grid' : 'flex', gridTemplateColumns: isDesktop ? '1fr 1fr' : undefined, flexDirection: isDesktop ? undefined : 'column', gap: 0 }}>
 
           {/* LEFT / TOP: amount + context */}
           <div style={{ padding: isDesktop ? '28px 32px' : '20px 16px', borderRight: isDesktop ? '1px solid var(--border)' : 'none', display: 'flex', flexDirection: 'column' }}>
@@ -430,13 +430,13 @@ function LogPageInner() {
           </div>
 
           {/* RIGHT / BOTTOM: controls */}
-          <div style={{ padding: isDesktop ? '28px 32px' : '16px 16px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ padding: isDesktop ? '28px 32px' : '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
             {CategoryGrid}
 
-            <div style={{ display: 'flex', gap: 10 }}>
-              <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note…" style={{ flex: 1, fontSize: 14 }} />
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note…" style={{ flex: '1 1 120px', minWidth: 0, fontSize: 14 }} />
               {logType === 'expense' && accounts.length > 0 && (
-                <select value={accountId ?? ''} onChange={e => setAccountId(e.target.value ? parseInt(e.target.value) : null)} style={{ width: 120, flexShrink: 0, fontSize: 14 }}>
+                <select value={accountId ?? ''} onChange={e => setAccountId(e.target.value ? parseInt(e.target.value) : null)} style={{ flex: '1 1 110px', minWidth: 0, fontSize: 14 }}>
                   <option value="">Account</option>
                   {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
