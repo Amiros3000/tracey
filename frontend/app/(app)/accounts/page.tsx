@@ -89,6 +89,7 @@ function AccountsPageInner() {
   const [showImport, setShowImport] = useState(searchParams.get('import') === '1')
   const [editId, setEditId]         = useState<number | null>(null)
   const [newBalance, setNewBalance] = useState('')
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -101,6 +102,15 @@ function AccountsPageInner() {
     if (acctsResult.status === 'fulfilled') setAccounts(acctsResult.value)
     if (nwResult.status === 'fulfilled') setNetWorth(nwResult.value)
     setLoading(false)
+  }
+
+  async function deleteAccount(accountId: number) {
+    setDeletingId(accountId)
+    try {
+      await api.delete(`/accounts/${accountId}`)
+      loadData()
+    } catch { }
+    setDeletingId(null)
   }
 
   async function updateBalance(accountId: number) {
@@ -274,12 +284,24 @@ function AccountsPageInner() {
                     </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => { setEditId(account.id); setNewBalance(String(account.balance)) }}
-                    style={{ marginTop: 10, fontSize: 12, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Nunito, sans-serif', fontWeight: 700, padding: 0 }}
-                  >
-                    Update balance
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                    <button
+                      onClick={() => { setEditId(account.id); setNewBalance(String(account.balance)) }}
+                      style={{ fontSize: 12, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Nunito, sans-serif', fontWeight: 700, padding: 0 }}
+                    >
+                      Update balance
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete "${account.name}"? This won't delete its transactions.`))
+                          deleteAccount(account.id)
+                      }}
+                      disabled={deletingId === account.id}
+                      style={{ fontSize: 12, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Nunito, sans-serif', fontWeight: 600, padding: 0, opacity: deletingId === account.id ? 0.5 : 1 }}
+                    >
+                      {deletingId === account.id ? 'Deleting…' : 'Delete'}
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -391,6 +413,7 @@ function AddAccountModal({ onClose }: { onClose: () => void }) {
 
 function CSVImport({ onDone }: { onDone?: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null)
+  const [csvFile, setCsvFile] = useState<File | null>(null)  // store file in state, not just ref
 
   const [headers, setHeaders] = useState<string[]>([])
   const [dateCol, setDateCol] = useState('')
@@ -400,6 +423,8 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
   const [rows, setRows]               = useState<{ date: string; note: string; amount: string; category: string }[]>([])
   const [importing, setImporting]     = useState(false)
   const [parsing, setParsing]         = useState(false)
+  const [buildingRows, setBuildingRows] = useState(false)
+  const [importError, setImportError] = useState('')
   const [done, setDone]               = useState(0)
   const [step, setStep]               = useState<'upload' | 'account' | 'map' | 'review' | 'done'>('upload')
   const [fileType, setFileType]       = useState<'csv' | 'pdf' | null>(null)
@@ -418,7 +443,8 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
     setStep('upload'); setRows([]); setHeaders([])
     setFileType(null); setDetectedAccount(null); setLinkedAccountId(null)
     setAccountAction('create'); setSelectedAccountId(null)
-    setNewAcctName(''); setNewAcctBalance('')
+    setNewAcctName(''); setNewAcctBalance(''); setCsvFile(null)
+    setImportError('')
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -426,11 +452,12 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.name.toLowerCase().endsWith('.pdf')) { setFileType('pdf'); handlePDF(file) }
-    else { setFileType('csv'); handleCSV(file) }
+    else { setFileType('csv'); setCsvFile(file); handleCSV(file) }
   }
 
   async function handlePDF(file: File) {
     setParsing(true)
+    setImportError('')
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -442,12 +469,21 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        alert(err.detail || 'Failed to parse PDF'); return
+        setImportError(err.detail || 'Failed to parse PDF. Try a shorter statement or use CSV export instead.')
+        setStep('upload')
+        return
       }
       const data = await res.json()
       const mapped = (data.transactions as { date: string; note: string; amount: number }[])
         .filter(t => t.amount > 0)
         .map(t => ({ date: t.date, note: t.note, amount: String(t.amount), category: guessCategory(t.note) }))
+
+      if (mapped.length === 0) {
+        setImportError('No transactions found in this PDF. Try a different date range or use CSV export instead.')
+        setStep('upload')
+        return
+      }
+
       setRows(mapped)
 
       if (data.account) {
@@ -468,7 +504,8 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
         setStep('review')
       }
     } catch {
-      alert('Failed to parse PDF — make sure the backend is running')
+      setImportError('Failed to parse PDF — make sure the backend is running.')
+      setStep('upload')
     } finally {
       setParsing(false)
     }
@@ -512,22 +549,36 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
   }
 
   function buildCSVRows() {
-    Papa.parse(fileRef.current!.files![0], {
+    const file = csvFile
+    if (!file) { setImportError('File lost — please re-upload.'); setStep('upload'); return }
+    setBuildingRows(true)
+    Papa.parse(file, {
       header: true, skipEmptyLines: true,
       complete: (result) => {
         const mapped = (result.data as any[]).map(row => {
-          const rawAmt = String(row[amtCol] || '0').replace(/[$,]/g, '')
+          const rawAmt = String(row[amtCol] || '0').replace(/[$,()]/g, '')
           const amt = Math.abs(parseFloat(rawAmt) || 0)
           const desc = String(row[descCol] || '')
           return { date: String(row[dateCol] || today()).slice(0, 10), note: desc, amount: String(amt), category: guessCategory(desc) }
         }).filter(r => parseFloat(r.amount) > 0)
-        setRows(mapped); setStep('review')
+        if (mapped.length === 0) {
+          setImportError(`No transactions found. Check that "${amtCol}" is the right amount column — amounts may be in a different column.`)
+          setBuildingRows(false)
+          return
+        }
+        setRows(mapped); setStep('review'); setBuildingRows(false)
+      },
+      error: () => {
+        setImportError('Failed to read CSV. Try re-exporting from your bank.')
+        setBuildingRows(false)
       },
     })
   }
 
   async function importAll() {
+    if (rows.length === 0) return
     setImporting(true)
+    setImportError('')
     try {
       const res = await api.post<{ created: number }>('/expenses/batch', {
         expenses: rows.map(r => ({
@@ -538,7 +589,7 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
       })
       setDone(res.created); setStep('done')
     } catch {
-      alert('Import failed')
+      setImportError('Import failed — try again.')
     }
     setImporting(false)
   }
@@ -548,6 +599,12 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
       <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
         Upload a CSV or PDF bank statement. Works with any Canadian bank.
       </p>
+
+      {importError && (
+        <div style={{ backgroundColor: '#fff1f2', color: 'var(--danger)', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+          {importError}
+        </div>
+      )}
 
       {step === 'upload' && (
         <div>
@@ -646,7 +703,9 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
           ))}
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-ghost" onClick={reset} style={{ fontSize: 14 }}>Back</button>
-            <button className="btn-primary" onClick={buildCSVRows} style={{ fontSize: 14 }}>Preview →</button>
+            <button className="btn-primary" onClick={buildCSVRows} disabled={buildingRows} style={{ fontSize: 14 }}>
+              {buildingRows ? 'Reading…' : 'Preview →'}
+            </button>
           </div>
         </div>
       )}
