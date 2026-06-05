@@ -44,6 +44,8 @@ from database import get_db
 from models import (
     ChangePINRequest,
     ChangePasswordRequest,
+    ChangeEmailRequest,
+    ChangeUsernameRequest,
     LoginRequest,
     PINLoginRequest,
     RefreshRequest,
@@ -325,21 +327,51 @@ def change_pin(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
 ):
-    """
-    Update or set the quick-access PIN.
-    Requires the full password as a security gate — PIN changes are sensitive
-    because a PIN is the daily entry point to all financial data.
-    """
-    if not verify_password(body.password, current_user["password_hash"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect password",
-        )
-
     db.execute(
         "UPDATE users SET pin_hash = ? WHERE id = ?",
         (hash_pin(body.new_pin), current_user["id"]),
     )
+
+
+@router.post("/change-email", status_code=204)
+@limiter.limit("5/minute")
+def change_email(
+    request: Request,
+    body: ChangeEmailRequest,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    existing = db.execute(
+        "SELECT id FROM users WHERE email = ? AND id != ?", (body.new_email, current_user["id"])
+    ).fetchone()
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already in use")
+    db.execute(
+        "UPDATE users SET email = ?, email_verified = 0 WHERE id = ?",
+        (body.new_email, current_user["id"]),
+    )
+    db.commit()
+    _send_verification_email(db, current_user["id"], body.new_email)
+
+
+@router.post("/change-username", status_code=204)
+@limiter.limit("5/minute")
+def change_username(
+    request: Request,
+    body: ChangeUsernameRequest,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    existing = db.execute(
+        "SELECT id FROM users WHERE username = ? AND id != ?", (body.new_username, current_user["id"])
+    ).fetchone()
+    if existing:
+        raise HTTPException(status_code=409, detail="Username already taken")
+    db.execute(
+        "UPDATE users SET username = ? WHERE id = ?",
+        (body.new_username, current_user["id"]),
+    )
+    db.commit()
 
 
 @router.get("/me", response_model=UserResponse)

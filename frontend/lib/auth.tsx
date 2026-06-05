@@ -40,6 +40,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>
   pinLogin: (pin: string) => Promise<void>
   logout: () => void
+  refreshUser: () => Promise<void>
 }
 
 // ─── Context ───────────────────────────────────────────────────────────────
@@ -101,6 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    const me = await api.get<User>('/auth/me')
+    setUser(me)
+  }, [])
+
   return (
     <AuthContext.Provider
       value={{
@@ -110,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         pinLogin,
         logout,
+        refreshUser,
       }}
     >
       {children}

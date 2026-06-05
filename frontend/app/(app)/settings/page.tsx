@@ -37,7 +37,7 @@ function calcNextPay(lastPayStr: string, cycle: string): string {
 }
 
 export default function SettingsPage() {
-  const { user, logout } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
   const router = useRouter()
 
   const [paySettings, setPaySettings]   = useState<PaySettings | null>(null)
@@ -58,6 +58,16 @@ export default function SettingsPage() {
   const [pinError, setPinError]         = useState('')
   const [pinSuccess, setPinSuccess]     = useState(false)
   const [savingPin, setSavingPin]       = useState(false)
+
+  const [newEmail, setNewEmail]           = useState('')
+  const [emailError, setEmailError]       = useState('')
+  const [emailSuccess, setEmailSuccess]   = useState(false)
+  const [savingEmail, setSavingEmail]     = useState(false)
+
+  const [newUsername, setNewUsername]         = useState('')
+  const [usernameError, setUsernameError]     = useState('')
+  const [usernameSuccess, setUsernameSuccess] = useState(false)
+  const [savingUsername, setSavingUsername]   = useState(false)
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting]                   = useState(false)
@@ -110,7 +120,7 @@ export default function SettingsPage() {
     if (newPin !== confirmPin) { setPinError('PINs do not match'); return }
     setSavingPin(true)
     try {
-      await api.post('/auth/change-pin', { pin: newPin })
+      await api.post('/auth/change-pin', { new_pin: newPin })
       localStorage.setItem('tracey_has_pin', '1')
       setPinSuccess(true)
       setNewPin(''); setConfirmPin('')
@@ -119,6 +129,40 @@ export default function SettingsPage() {
       setPinError('Failed to update PIN')
     } finally {
       setSavingPin(false)
+    }
+  }
+
+  async function changeEmail() {
+    setEmailError('')
+    if (!newEmail.trim()) { setEmailError('Enter a new email'); return }
+    setSavingEmail(true)
+    try {
+      await api.post('/auth/change-email', { new_email: newEmail.trim().toLowerCase() })
+      await refreshUser()
+      setEmailSuccess(true)
+      setNewEmail('')
+      setTimeout(() => setEmailSuccess(false), 4000)
+    } catch (err: any) {
+      setEmailError(err?.message || 'Failed to update email')
+    } finally {
+      setSavingEmail(false)
+    }
+  }
+
+  async function changeUsername() {
+    setUsernameError('')
+    if (!newUsername.trim()) { setUsernameError('Enter a new username'); return }
+    setSavingUsername(true)
+    try {
+      await api.post('/auth/change-username', { new_username: newUsername.trim() })
+      await refreshUser()
+      setUsernameSuccess(true)
+      setNewUsername('')
+      setTimeout(() => setUsernameSuccess(false), 3000)
+    } catch (err: any) {
+      setUsernameError(err?.message || 'Username already taken')
+    } finally {
+      setSavingUsername(false)
     }
   }
 
@@ -143,6 +187,36 @@ export default function SettingsPage() {
             <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>tracey account</p>
           </div>
         </div>
+      </div>
+
+      {/* Change username */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>Change username</p>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>Current: <strong style={{ color: 'var(--text-primary)' }}>{user?.username}</strong></p>
+        <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)}
+          placeholder="New username" autoCapitalize="none" autoCorrect="off" style={{ marginBottom: 10, fontSize: 14 }} />
+        {usernameError   && <p style={{ fontSize: 13, color: 'var(--danger)',  fontWeight: 600, marginBottom: 8 }}>{usernameError}</p>}
+        {usernameSuccess && <p style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600, marginBottom: 8 }}>✓ Username updated</p>}
+        <button className="btn-primary" onClick={changeUsername} disabled={savingUsername || !newUsername.trim()} style={{ fontSize: 14 }}>
+          {savingUsername ? 'Updating…' : 'Update username'}
+        </button>
+      </div>
+
+      {/* Change email */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>Change email</p>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>
+          Current: <strong style={{ color: 'var(--text-primary)' }}>{user?.email || 'not set'}</strong>
+          {user?.email && !user.email_verified && <span style={{ color: 'var(--warning)', marginLeft: 6, fontWeight: 600 }}>unverified</span>}
+          {user?.email && user.email_verified  && <span style={{ color: 'var(--success)', marginLeft: 6, fontWeight: 600 }}>✓ verified</span>}
+        </p>
+        <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
+          placeholder="New email address" autoCapitalize="none" style={{ marginBottom: 10, fontSize: 14 }} />
+        {emailError   && <p style={{ fontSize: 13, color: 'var(--danger)',  fontWeight: 600, marginBottom: 8 }}>{emailError}</p>}
+        {emailSuccess && <p style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600, marginBottom: 8 }}>✓ Email updated — check your inbox to verify</p>}
+        <button className="btn-primary" onClick={changeEmail} disabled={savingEmail || !newEmail.trim()} style={{ fontSize: 14 }}>
+          {savingEmail ? 'Updating…' : 'Update email'}
+        </button>
       </div>
 
       {/* Pay cycle */}

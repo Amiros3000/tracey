@@ -82,7 +82,6 @@ class ChangePasswordRequest(BaseModel):
 
 
 class ChangePINRequest(BaseModel):
-    password: str    # full password required to change PIN (security gate)
     new_pin: str
 
     @field_validator("new_pin")
@@ -90,6 +89,30 @@ class ChangePINRequest(BaseModel):
     def pin_format(cls, v: str) -> str:
         if not v.isdigit() or len(v) != 4:
             raise ValueError("PIN must be exactly 4 digits")
+        return v
+
+
+class ChangeEmailRequest(BaseModel):
+    new_email: str
+
+    @field_validator("new_email")
+    @classmethod
+    def email_valid(cls, v: str) -> str:
+        v = v.strip().lower()
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Invalid email address")
+        return v
+
+
+class ChangeUsernameRequest(BaseModel):
+    new_username: str
+
+    @field_validator("new_username")
+    @classmethod
+    def username_valid(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("Username must be at least 2 characters")
         return v
 
 
