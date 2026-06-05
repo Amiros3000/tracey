@@ -28,6 +28,7 @@ from models import (
     AccountUpdate,
     BalanceUpdateRequest,
     NetWorthResponse,
+    NetWorthHistoryPoint,
 )
 
 router = APIRouter()
@@ -158,6 +159,71 @@ def get_net_worth(
         net_worth=round(total_assets - total_liabilities, 2),
         by_account_type={k: round(v, 2) for k, v in by_type.items()},
     )
+
+
+@router.get("/net-worth/history", response_model=list[NetWorthHistoryPoint])
+def get_net_worth_history(
+    days: int = 90,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """
+    Weekly net-worth snapshots for trend charts.
+    Uses the most recent known balance for each account as of each target date.
+    """
+    from datetime import date, timedelta
+
+    accounts = db.execute(
+        "SELECT id, type FROM accounts WHERE user_id = ? AND is_active = 1",
+        (current_user["id"],),
+    ).fetchall()
+
+    if not accounts:
+        return []
+
+    # Build per-account balance history: {account_id: [(date_str, balance), ...]}
+    history: dict[int, list] = {}
+    for acct in accounts:
+        rows = db.execute(
+            """SELECT date(recorded_at) as d, balance
+               FROM balance_history WHERE account_id = ?
+               ORDER BY recorded_at ASC""",
+            (acct["id"],),
+        ).fetchall()
+        history[acct["id"]] = [(r["d"], r["balance"]) for r in rows]
+
+    today = date.today()
+    result = []
+
+    # Produce one data point per week going back `days`
+    for weeks_back in range(days // 7, -1, -1):
+        target = (today - timedelta(weeks=weeks_back)).isoformat()
+        assets = liabilities = 0.0
+
+        for acct in accounts:
+            balance = None
+            for d, bal in reversed(history.get(acct["id"], [])):
+                if d <= target:
+                    balance = bal
+                    break
+
+            if balance is None:
+                continue
+
+            if acct["type"] in _LIABILITY_TYPES:
+                liabilities += balance
+            else:
+                assets += balance
+
+        if assets > 0 or liabilities > 0:
+            result.append(NetWorthHistoryPoint(
+                date=target,
+                assets=round(assets, 2),
+                liabilities=round(liabilities, 2),
+                net_worth=round(assets - liabilities, 2),
+            ))
+
+    return result
 
 
 @router.get("/{account_id}", response_model=AccountResponse)

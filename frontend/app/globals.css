@@ -1,0 +1,317 @@
+@import url('https://unpkg.com/@fontsource/nunito/400.css');
+@import url('https://unpkg.com/@fontsource/nunito/600.css');
+@import url('https://unpkg.com/@fontsource/nunito/700.css');
+@import url('https://unpkg.com/@fontsource/nunito/800.css');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design tokens — light mode ─────────────────────────────────────────── */
+:root {
+  --primary:           #22c55e;
+  --primary-pressed:   #16a34a;
+  --primary-light-bg:  #f0fdf4;
+
+  --bg:      #F7F8FA;
+  --surface: #EDEEF0;
+  --card:    #FFFFFF;
+
+  --text-primary:   #0A0A0A;
+  --text-secondary: #6B7280;
+
+  --border: #E5E7EB;
+
+  --success: #22c55e;
+  --warning: #F59E0B;
+  --danger:  #EF4444;
+
+  --sidebar-width:     220px;
+  --bottom-nav-height: 80px;
+}
+
+/* ─── Design tokens — dark mode ──────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:      #0C0C0C;
+    --surface: #1C1C1C;
+    --card:    #161616;
+
+    --text-primary:   #F5F5F5;
+    --text-secondary: #9CA3AF;
+
+    --border: #262626;
+
+    --primary:          #22c55e;
+    --primary-pressed:  #16a34a;
+    --primary-light-bg: #052e16;
+  }
+}
+
+/* ─── Base ────────────────────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ─── Utilities ───────────────────────────────────────────────────────────── */
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  background-color: var(--card);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    border-color: transparent;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.4);
+  }
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────────────── */
+.btn-primary {
+  background-color: var(--primary);
+  color: white;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  border-radius: 10px;
+  padding: 12px 20px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+  letter-spacing: -0.01em;
+}
+
+.btn-primary:hover  { background-color: var(--primary-pressed); }
+.btn-primary:active { opacity: 0.85; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-ghost {
+  background-color: var(--surface);
+  color: var(--text-secondary);
+  font-family: 'Nunito', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  border-radius: 10px;
+  padding: 12px 20px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.12s;
+}
+
+.btn-ghost:hover { background-color: var(--border); }
+
+/* ─── Inputs ──────────────────────────────────────────────────────────────── */
+input, textarea, select {
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  background-color: var(--surface);
+  color: var(--text-primary);
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  padding: 11px 14px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--primary);
+  background-color: var(--card);
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ─── App shell ───────────────────────────────────────────────────────────── */
+.app-sidebar {
+  display: none;
+}
+
+.app-main {
+  min-height: 100dvh;
+  padding-bottom: var(--bottom-nav-height);
+}
+
+.page-content {
+  padding: 20px 16px 24px;
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+/* ─── Desktop ─────────────────────────────────────────────────────────────── */
+@media (min-width: 768px) {
+  :root { --bottom-nav-height: 0px; }
+
+  .app-sidebar {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: var(--sidebar-width);
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    padding: 20px 12px;
+    z-index: 50;
+    overflow-y: auto;
+  }
+
+  .app-main     { margin-left: var(--sidebar-width); padding-bottom: 48px; }
+  .bottom-nav-hide { display: none !important; }
+
+  .page-content {
+    padding: 36px 48px 48px;
+    max-width: 860px;
+  }
+}
+
+/* ─── Sidebar styles ──────────────────────────────────────────────────────── */
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: background-color 0.1s, color 0.1s;
+  margin-bottom: 1px;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-link:hover {
+  background-color: var(--surface);
+  color: var(--text-primary);
+}
+
+.sidebar-link.active {
+  background-color: var(--primary-light-bg);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* ─── Modal overlays ─────────────────────────────────────────────────────── */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes fadeScaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  animation: overlayFadeIn 0.15s ease;
+}
+
+.modal-sheet {
+  background-color: var(--card);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  animation: slideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (min-width: 768px) {
+  .modal-overlay {
+    padding-left: var(--sidebar-width);
+    align-items: center;
+    padding-top: 40px;
+    padding-bottom: 40px;
+  }
+
+  .modal-sheet {
+    max-width: 560px;
+    border-radius: 20px;
+    animation: fadeScaleIn 0.18s cubic-bezier(0.34, 1.2, 0.64, 1);
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+  }
+}
+
+/* ─── Shimmer loading ─────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--border) 50%, var(--surface) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: 6px;
+}
+
+/* ─── Spin ────────────────────────────────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2.5px solid var(--surface);
+  border-top-color: var(--primary);
+  animation: spin 0.75s linear infinite;
+}
+
+/* ─── AI chat shell ───────────────────────────────────────────────────────── */
+.ai-chat-shell {
+  height: calc(100dvh - var(--bottom-nav-height));
+}

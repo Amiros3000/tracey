@@ -18,8 +18,17 @@ python-dotenv==1.0.1
 # Data validation
 pydantic==2.10.3
 
-# AI — Claude API
+# AI — Anthropic (Claude, used for chat + scanned PDF fallback)
 anthropic==0.40.0
+
+# AI — OpenRouter via OpenAI-compatible SDK (insights, lookup, PDF parsing)
+openai==1.82.0
+
+# PDF text extraction (digital PDFs — avoids sending binary to AI)
+pdfplumber==0.11.6
+
+# Transactional email — verification emails on signup
+resend==2.10.0
 
 # Rate limiting
 slowapi==0.1.9

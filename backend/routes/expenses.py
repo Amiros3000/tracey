@@ -17,11 +17,19 @@ Summary (GET /expenses/summary):
   Returns total and per-category breakdown for the date range.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import base64
+import io
+import json
+import os
+
+import anthropic
+import pdfplumber
+from openai import OpenAI
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from typing import Optional
 from auth import get_current_user
 from database import get_db
-from models import ExpenseCreate, ExpenseResponse, ExpenseSummaryResponse, ExpenseUpdate
+from models import ExpenseCreate, ExpenseResponse, ExpenseSummaryResponse, ExpenseUpdate, ExpenseBatchCreate, ExpenseBatchResponse
 
 router = APIRouter()
 
@@ -141,6 +149,204 @@ def create_expense(
     expense_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
     row = db.execute("SELECT * FROM expenses WHERE id = ?", (expense_id,)).fetchone()
     return dict(row)
+
+
+@router.post("/batch", response_model=ExpenseBatchResponse, status_code=201)
+def batch_create_expenses(
+    body: ExpenseBatchCreate,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """
+    Bulk-insert expenses — used by the CSV import flow.
+    Each expense is validated individually; if any fail the whole batch is rejected.
+    """
+    if not body.expenses:
+        raise HTTPException(status_code=400, detail="No expenses provided")
+    if len(body.expenses) > 500:
+        raise HTTPException(status_code=400, detail="Maximum 500 expenses per batch")
+
+    created_ids = []
+    for exp in body.expenses:
+        if exp.account_id is not None:
+            _verify_account_ownership(db, exp.account_id, current_user["id"])
+        db.execute(
+            "INSERT INTO expenses (user_id, amount, category, note, date, account_id) VALUES (?,?,?,?,?,?)",
+            (current_user["id"], exp.amount, exp.category, exp.note, exp.date, exp.account_id),
+        )
+        created_ids.append(db.execute("SELECT last_insert_rowid()").fetchone()[0])
+
+    rows = [
+        dict(db.execute("SELECT * FROM expenses WHERE id = ?", (eid,)).fetchone())
+        for eid in created_ids
+    ]
+    return ExpenseBatchResponse(created=len(rows), expenses=rows)
+
+
+_PDF_PARSE_PROMPT = (
+    "Parse this bank statement. Return ONLY a JSON object — no other text:\n\n"
+    "{\n"
+    '  "account": {\n'
+    '    "institution": "TD Bank",\n'
+    '    "name": "TD Every Day Chequing",\n'
+    '    "type": "chequing",\n'
+    '    "last_four": "1234",\n'
+    '    "balance": 1234.56\n'
+    "  },\n"
+    '  "transactions": [\n'
+    '    {"date": "YYYY-MM-DD", "note": "merchant name", "amount": 12.34}\n'
+    "  ]\n"
+    "}\n\n"
+    "Rules:\n"
+    "- account.type: chequing, savings, credit_card, loan, line_of_credit, investment, or other\n"
+    "- account.balance: closing/current balance, or null if not shown\n"
+    "- account.last_four: last 4 digits of account/card number, or null\n"
+    "- transactions: only debits/withdrawals/purchases — skip deposits, credits, fees, balance rows\n"
+    "- amounts: positive numbers only\n"
+    "- dates: YYYY-MM-DD format"
+)
+
+
+def _extract_pdf_text(content: bytes) -> str:
+    """Extract text from a digital PDF using pdfplumber. Returns '' for scanned/image PDFs."""
+    try:
+        parts = []
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            for page in pdf.pages:
+                # Tables first — bank statements are mostly tabular
+                tables = page.extract_tables()
+                if tables:
+                    for table in tables:
+                        for row in table:
+                            if row and any(cell for cell in row):
+                                parts.append(' | '.join(str(cell or '').strip() for cell in row))
+                # Plain text for headers, account info etc.
+                text = page.extract_text()
+                if text:
+                    parts.append(text)
+        return '\n'.join(parts)
+    except Exception:
+        return ''
+
+
+def _strip_json_fences(raw: str) -> str:
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return raw.strip()
+
+
+@router.post("/parse-pdf")
+def parse_pdf_statement(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    content = file.file.read()
+
+    if not content.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="File must be a valid PDF")
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="PDF too large (max 20 MB)")
+
+    extracted_text = _extract_pdf_text(content)
+
+    if len(extracted_text) >= 100:
+        # Digital PDF — extract text locally (free) then send text to cheap model
+        or_key = os.getenv("OPENROUTER_API_KEY")
+        if not or_key:
+            raise HTTPException(status_code=503, detail="AI parsing not configured")
+
+        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=or_key)
+        response = client.chat.completions.create(
+            model="google/gemini-2.5-flash",
+            max_tokens=4096,
+            messages=[{
+                "role": "user",
+                "content": f"{_PDF_PARSE_PROMPT}\n\nBank statement text:\n{extracted_text[:12000]}",
+            }],
+        )
+        raw = response.choices[0].message.content.strip()
+    else:
+        # Scanned/image PDF — fall back to Claude with native PDF vision
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="Scanned PDF detected — requires ANTHROPIC_API_KEY in backend/.env",
+            )
+        pdf_b64 = base64.standard_b64encode(content).decode("utf-8")
+        claude = anthropic.Anthropic(api_key=api_key)
+        response = claude.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=4096,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_b64}},
+                    {"type": "text", "text": _PDF_PARSE_PROMPT},
+                ],
+            }],
+        )
+        raw = response.content[0].text.strip()
+
+    try:
+        parsed = json.loads(_strip_json_fences(raw))
+        if not isinstance(parsed, dict) or "transactions" not in parsed:
+            raise ValueError("unexpected shape")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Could not parse statement — try a different PDF")
+
+    return {
+        "account": parsed.get("account"),
+        "transactions": parsed.get("transactions", []),
+    }
+
+
+@router.get("/streak")
+def get_expense_streak(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Return the current logging streak (consecutive days with at least one expense or check-in)."""
+    import datetime
+
+    expense_rows = db.execute(
+        "SELECT DISTINCT date FROM expenses WHERE user_id = ? ORDER BY date DESC",
+        (current_user["id"],),
+    ).fetchall()
+    checkin_rows = db.execute(
+        "SELECT DISTINCT date FROM daily_checkins WHERE user_id = ? ORDER BY date DESC",
+        (current_user["id"],),
+    ).fetchall()
+
+    dates_set = {row["date"] for row in expense_rows} | {row["date"] for row in checkin_rows}
+    today = datetime.date.today()
+    today_str = today.isoformat()
+    today_logged = today_str in dates_set
+
+    start = today if today_logged else today - datetime.timedelta(days=1)
+    streak = 0
+    check = start
+    while check.isoformat() in dates_set:
+        streak += 1
+        check -= datetime.timedelta(days=1)
+
+    return {"streak": streak, "today_logged": today_logged}
+
+
+@router.post("/check-in", status_code=204)
+def daily_checkin(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Record a 'nothing to log today' check-in that keeps the streak alive."""
+    import datetime
+    today = datetime.date.today().isoformat()
+    db.execute(
+        "INSERT OR IGNORE INTO daily_checkins (user_id, date) VALUES (?, ?)",
+        (current_user["id"], today),
+    )
 
 
 @router.get("/{expense_id}", response_model=ExpenseResponse)

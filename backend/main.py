@@ -24,7 +24,7 @@ from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 
 from database import init_db
-from routes import auth_routes, accounts, expenses, income
+from routes import auth_routes, accounts, expenses, income, ai_routes, recurring, rewards
 
 load_dotenv()
 
@@ -101,6 +101,9 @@ app.include_router(auth_routes.router, prefix="/auth",     tags=["Auth"])
 app.include_router(accounts.router,    prefix="/accounts", tags=["Accounts"])
 app.include_router(expenses.router,    prefix="/expenses", tags=["Expenses"])
 app.include_router(income.router,      prefix="/income",   tags=["Income"])
+app.include_router(ai_routes.router,   prefix="/ai",         tags=["AI"])
+app.include_router(recurring.router,   prefix="/recurring",  tags=["Recurring"])
+app.include_router(rewards.router,     prefix="/rewards",    tags=["Rewards"])
 
 
 # ---------------------------------------------------------------------------

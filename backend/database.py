@@ -27,13 +27,23 @@ SCHEMA = """
 -- One user per personal instance.  user_id is carried on all tables so
 -- the schema is multi-user ready if a family member needs to be added later.
 CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    username      TEXT    NOT NULL UNIQUE,
-    password_hash TEXT    NOT NULL,
-    pin_hash      TEXT,
-    privacy_level TEXT    NOT NULL DEFAULT 'full',  -- simple / smart / full
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_login    DATETIME
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    username       TEXT    NOT NULL UNIQUE,
+    email          TEXT    UNIQUE,
+    email_verified INTEGER NOT NULL DEFAULT 0,
+    password_hash  TEXT    NOT NULL,
+    pin_hash       TEXT,
+    privacy_level  TEXT    NOT NULL DEFAULT 'full',
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login     DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token      TEXT    NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Refresh tokens stored and hashed so they can be revoked individually
@@ -215,7 +225,7 @@ def _open_connection() -> sqlcipher3.Connection:
             "Generate one with: openssl rand -hex 32"
         )
 
-    conn = sqlcipher3.connect(DATABASE_PATH)
+    conn = sqlcipher3.connect(DATABASE_PATH, check_same_thread=False)
 
     # PRAGMA key must come before ANY other SQL on this connection.
     # The key comes from an env var, never from user input, so using
@@ -233,15 +243,23 @@ def _open_connection() -> sqlcipher3.Connection:
 
 
 def init_db() -> None:
-    """
-    Create all tables on application startup.
-
-    Called once via FastAPI's lifespan event.  Safe to run on every startup
-    because every statement uses CREATE TABLE IF NOT EXISTS.
-    """
     conn = _open_connection()
     try:
         conn.executescript(SCHEMA)
+        # Migrations for existing databases that predate new columns
+        for migration in [
+            "ALTER TABLE users ADD COLUMN email TEXT",
+            "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
+            """CREATE TABLE IF NOT EXISTS daily_checkins (
+               id       INTEGER PRIMARY KEY AUTOINCREMENT,
+               user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+               date     TEXT NOT NULL,
+               UNIQUE(user_id, date))""",
+        ]:
+            try:
+                conn.execute(migration)
+            except Exception:
+                pass  # column already exists
         conn.commit()
     finally:
         conn.close()

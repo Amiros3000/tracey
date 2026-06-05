@@ -197,6 +197,22 @@ def create_income(
     return dict(row)
 
 
+@router.get("/sources")
+def get_income_sources(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Return distinct income sources ordered by frequency — used for autocomplete on the log page."""
+    rows = db.execute(
+        """SELECT source, income_type, COUNT(*) AS cnt
+           FROM income WHERE user_id = ?
+           GROUP BY source, income_type
+           ORDER BY cnt DESC LIMIT 20""",
+        (current_user["id"],),
+    ).fetchall()
+    return [{"source": r["source"], "income_type": r["income_type"], "count": r["cnt"]} for r in rows]
+
+
 @router.get("/{income_id}", response_model=IncomeResponse)
 def get_income(
     income_id: int,

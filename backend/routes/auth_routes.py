@@ -17,6 +17,11 @@ Security notes:
   - Password change revokes all refresh tokens so other sessions must re-auth.
 """
 
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
+
+import resend
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -52,44 +57,123 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-@limiter.limit("5/minute")  # strict: prevents automation of registration attempts
+@limiter.limit("5/minute")
 def register(request: Request, body: RegisterRequest, db=Depends(get_db)):
-    """
-    Create the single user account.
-
-    Only succeeds if no users exist yet — this protects a self-hosted VPS from
-    unauthorised registrations after the owner has set up their account.
-    To add a second user later, remove this guard and add an invite system.
-    """
-    existing = db.execute("SELECT id FROM users LIMIT 1").fetchone()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Registration is closed — an account already exists on this server.",
-        )
+    if db.execute("SELECT id FROM users WHERE username = ?", (body.username,)).fetchone():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken — try a different one.")
+    if db.execute("SELECT id FROM users WHERE email = ?", (body.email,)).fetchone():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with that email already exists.")
 
     password_hash = hash_password(body.password)
     pin_hash = hash_pin(body.pin) if body.pin else None
 
     db.execute(
-        """INSERT INTO users (username, password_hash, pin_hash, privacy_level)
-           VALUES (?, ?, ?, ?)""",
-        (body.username, password_hash, pin_hash, body.privacy_level),
+        "INSERT INTO users (username, email, password_hash, pin_hash) VALUES (?, ?, ?, ?)",
+        (body.username, body.email, password_hash, pin_hash),
     )
-
-    user = db.execute(
-        "SELECT id FROM users WHERE username = ?", (body.username,)
-    ).fetchone()
-    user_id = user["id"]
-
-    # Seed default settings so the frontend always has something to read
+    user_id = db.execute("SELECT id FROM users WHERE username = ?", (body.username,)).fetchone()["id"]
     _seed_default_settings(db, user_id)
+
+    # Send verification email (non-blocking — don't fail registration if email fails)
+    _send_verification_email(db, user_id, body.email)
 
     access_token  = create_access_token(user_id)
     refresh_token = create_refresh_token(user_id)
     store_refresh_token(db, user_id, refresh_token)
-
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+def _send_verification_email(db, user_id: int, email: str) -> None:
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        return  # email not configured — skip silently
+
+    token = secrets.token_urlsafe(32)
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+    db.execute(
+        "DELETE FROM email_verification_tokens WHERE user_id = ?", (user_id,)
+    )
+    db.execute(
+        "INSERT INTO email_verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+        (user_id, token, expires_at),
+    )
+
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    verify_link = f"{frontend_url}/verify-email?token={token}"
+    from_email = os.getenv("FROM_EMAIL", "tracey <onboarding@resend.dev>")
+
+    resend.api_key = api_key
+    try:
+        resend.Emails.send({
+            "from": from_email,
+            "to": [email],
+            "subject": "Verify your tracey account",
+            "html": f"""
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#F7F8FA;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;border:1px solid #e5e7eb;overflow:hidden">
+        <tr>
+          <td style="background:#22c55e;padding:28px 32px">
+            <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.03em">
+              trace<span style="color:#dcfce7">y</span>
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px">
+            <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#0a0a0a">Verify your email</h1>
+            <p style="margin:0 0 28px;font-size:15px;color:#6b7280;line-height:1.6">
+              Click the button below to verify your email address and complete your tracey account setup.
+              This link expires in 24 hours.
+            </p>
+            <a href="{verify_link}"
+               style="display:inline-block;padding:14px 28px;background:#22c55e;color:#ffffff;
+                      text-decoration:none;border-radius:10px;font-weight:700;font-size:15px">
+              Verify my email
+            </a>
+            <p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6">
+              If you didn't create a tracey account, you can safely ignore this email.<br>
+              Or copy this link: {verify_link}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>""",
+        })
+    except Exception:
+        pass  # never block registration due to email failure
+
+
+@router.get("/verify-email", status_code=204)
+def verify_email(token: str, db=Depends(get_db)):
+    row = db.execute(
+        "SELECT * FROM email_verification_tokens WHERE token = ?", (token,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
+    expires_at = datetime.fromisoformat(row["expires_at"])
+    if datetime.now(timezone.utc) > expires_at:
+        db.execute("DELETE FROM email_verification_tokens WHERE token = ?", (token,))
+        raise HTTPException(status_code=400, detail="Verification link has expired — request a new one.")
+    db.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (row["user_id"],))
+    db.execute("DELETE FROM email_verification_tokens WHERE token = ?", (token,))
+
+
+@router.post("/resend-verification", status_code=204)
+@limiter.limit("3/minute")
+def resend_verification(request: Request, user=Depends(get_current_user), db=Depends(get_db)):
+    row = db.execute("SELECT email, email_verified FROM users WHERE id = ?", (user["id"],)).fetchone()
+    if not row or not row["email"]:
+        raise HTTPException(status_code=400, detail="No email address on file.")
+    if row["email_verified"]:
+        raise HTTPException(status_code=400, detail="Email is already verified.")
+    _send_verification_email(db, user["id"], row["email"])
 
 
 def _seed_default_settings(db, user_id: int) -> None:
@@ -264,7 +348,27 @@ def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(
         id=current_user["id"],
         username=current_user["username"],
+        email=current_user["email"],
+        email_verified=bool(current_user["email_verified"]),
         privacy_level=current_user["privacy_level"],
         created_at=current_user["created_at"],
         last_login=current_user["last_login"],
     )
+
+
+@router.delete("/data", status_code=204)
+def delete_all_data(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """
+    Delete all financial data for the current user but keep the account.
+    Deleting accounts cascades to balance_history, rewards, reward_transactions.
+    """
+    uid = current_user["id"]
+    db.execute("DELETE FROM expenses              WHERE user_id = ?", (uid,))
+    db.execute("DELETE FROM income                WHERE user_id = ?", (uid,))
+    db.execute("DELETE FROM recurring_transactions WHERE user_id = ?", (uid,))
+    db.execute("DELETE FROM savings_goals         WHERE user_id = ?", (uid,))
+    db.execute("DELETE FROM settings              WHERE user_id = ?", (uid,))
+    db.execute("DELETE FROM accounts              WHERE user_id = ?", (uid,))

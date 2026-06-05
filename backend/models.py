@@ -15,9 +15,17 @@ from pydantic import BaseModel, field_validator
 
 class RegisterRequest(BaseModel):
     username: str
+    email: str
     password: str
-    pin: Optional[str] = None          # 4-digit string, optional at registration
-    privacy_level: str = "full"        # simple / smart / full
+    pin: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def email_format(cls, v: str) -> str:
+        v = v.strip().lower()
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Enter a valid email address")
+        return v
 
     @field_validator("password")
     @classmethod
@@ -32,14 +40,6 @@ class RegisterRequest(BaseModel):
         if v is not None:
             if not v.isdigit() or len(v) != 4:
                 raise ValueError("PIN must be exactly 4 digits")
-        return v
-
-    @field_validator("privacy_level")
-    @classmethod
-    def valid_privacy_level(cls, v: str) -> str:
-        allowed = {"simple", "smart", "full"}
-        if v not in allowed:
-            raise ValueError(f"privacy_level must be one of {allowed}")
         return v
 
 
@@ -96,6 +96,8 @@ class ChangePINRequest(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
+    email: Optional[str]
+    email_verified: bool
     privacy_level: str
     created_at: str
     last_login: Optional[str]
@@ -379,3 +381,135 @@ class NetWorthResponse(BaseModel):
     total_liabilities: float
     net_worth: float
     by_account_type: dict[str, float]
+
+
+class NetWorthHistoryPoint(BaseModel):
+    date: str
+    net_worth: float
+    assets: float
+    liabilities: float
+
+
+# ---------------------------------------------------------------------------
+# Recurring transactions
+# ---------------------------------------------------------------------------
+
+class RecurringCreate(BaseModel):
+    name: str
+    amount: float
+    type: str            # debit / credit
+    frequency: str       # weekly / monthly / quarterly / annual
+    day_of_month: Optional[int] = None
+    next_date: Optional[str] = None   # YYYY-MM-DD
+    category: Optional[str] = None
+    from_account_id: Optional[int] = None
+    to_account_id: Optional[int] = None
+    is_government_benefit: bool = False
+
+    @field_validator("amount")
+    @classmethod
+    def amount_positive(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("Amount must be greater than 0")
+        return v
+
+    @field_validator("type")
+    @classmethod
+    def valid_type(cls, v: str) -> str:
+        if v not in {"debit", "credit"}:
+            raise ValueError("type must be 'debit' or 'credit'")
+        return v
+
+    @field_validator("frequency")
+    @classmethod
+    def valid_frequency(cls, v: str) -> str:
+        if v not in {"weekly", "monthly", "quarterly", "annual"}:
+            raise ValueError("frequency must be weekly/monthly/quarterly/annual")
+        return v
+
+
+class RecurringUpdate(BaseModel):
+    name: Optional[str] = None
+    amount: Optional[float] = None
+    type: Optional[str] = None
+    frequency: Optional[str] = None
+    day_of_month: Optional[int] = None
+    next_date: Optional[str] = None
+    category: Optional[str] = None
+    from_account_id: Optional[int] = None
+    to_account_id: Optional[int] = None
+    is_government_benefit: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class RecurringResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    amount: float
+    type: str
+    frequency: str
+    day_of_month: Optional[int]
+    next_date: Optional[str]
+    category: Optional[str]
+    from_account_id: Optional[int]
+    to_account_id: Optional[int]
+    is_government_benefit: bool
+    is_active: bool
+    created_at: str
+
+
+# ---------------------------------------------------------------------------
+# Rewards
+# ---------------------------------------------------------------------------
+
+class RewardProfileCreate(BaseModel):
+    account_id: int
+    reward_type: str      # points / cashback / miles / hybrid
+    program_name: str
+    base_earn_rate: float = 1.0
+    bonus_rates: Optional[dict] = None   # {"🛒 Groceries": 3.0, "🍔 Eating Out": 2.0}
+    point_value_cents: float = 1.0
+    travel_value_cents: Optional[float] = None
+    expiry_policy: Optional[str] = None
+    known_balance: float = 0.0
+
+
+class RewardProfileUpdate(BaseModel):
+    reward_type: Optional[str] = None
+    program_name: Optional[str] = None
+    base_earn_rate: Optional[float] = None
+    bonus_rates: Optional[dict] = None
+    point_value_cents: Optional[float] = None
+    travel_value_cents: Optional[float] = None
+    expiry_policy: Optional[str] = None
+    known_balance: Optional[float] = None
+
+
+class RewardProfileResponse(BaseModel):
+    id: int
+    account_id: int
+    account_name: str
+    reward_type: str
+    program_name: str
+    base_earn_rate: float
+    bonus_rates: Optional[dict]
+    point_value_cents: float
+    travel_value_cents: Optional[float]
+    expiry_policy: Optional[str]
+    known_balance: float
+    estimated_balance: float
+    last_manual_update: Optional[str]
+
+
+# ---------------------------------------------------------------------------
+# Expense batch (CSV import)
+# ---------------------------------------------------------------------------
+
+class ExpenseBatchCreate(BaseModel):
+    expenses: list[ExpenseCreate]
+
+
+class ExpenseBatchResponse(BaseModel):
+    created: int
+    expenses: list[ExpenseResponse]
