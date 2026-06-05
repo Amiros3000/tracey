@@ -33,10 +33,7 @@ export default function LoginPage() {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      const done = localStorage.getItem('onboarding_complete')
-      router.replace(done ? '/dashboard' : '/onboarding')
-    }
+    if (isAuthenticated) router.replace('/dashboard')
   }, [isAuthenticated, router])
 
   // Auto-submit PIN when 4 digits entered
@@ -53,8 +50,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await login(username, password)
-      const done = localStorage.getItem('onboarding_complete')
-      router.replace(done ? '/dashboard' : '/onboarding')
+      router.replace('/dashboard')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Login failed')
     } finally {
