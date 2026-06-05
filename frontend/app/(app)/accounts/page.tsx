@@ -70,6 +70,20 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   loan: 'Loan', line_of_credit: 'Line of Credit', investment: 'Investment', other: 'Other',
 }
 
+function normalizeDate(raw: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  // MM/DD/YYYY → YYYY-MM-DD (RBC, CIBC, TD)
+  const mdy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`
+  // DD/MM/YYYY → YYYY-MM-DD
+  const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (dmy && parseInt(dmy[1]) > 12) return `${dmy[3].length === 2 ? '20' + dmy[3] : dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
+  // Fallback: try JS Date
+  const d = new Date(raw)
+  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  return raw.slice(0, 10)
+}
+
 function guessCategory(description: string): string {
   const lower = description.toLowerCase()
   for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
@@ -559,7 +573,7 @@ function CSVImport({ onDone }: { onDone?: () => void }) {
           const rawAmt = String(row[amtCol] || '0').replace(/[$,()]/g, '')
           const amt = Math.abs(parseFloat(rawAmt) || 0)
           const desc = String(row[descCol] || '')
-          return { date: String(row[dateCol] || today()).slice(0, 10), note: desc, amount: String(amt), category: guessCategory(desc) }
+          return { date: normalizeDate(String(row[dateCol] || today())), note: desc, amount: String(amt), category: guessCategory(desc) }
         }).filter(r => parseFloat(r.amount) > 0)
         if (mapped.length === 0) {
           setImportError(`No transactions found. Check that "${amtCol}" is the right amount column — amounts may be in a different column.`)

@@ -230,10 +230,15 @@ def _extract_pdf_text(content: bytes) -> str:
 
 
 def _strip_json_fences(raw: str) -> str:
-    if raw.startswith("```"):
-        raw = raw.split("```", 2)[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
+    import re
+    # Find JSON inside code fences anywhere in the response
+    fence = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', raw, re.DOTALL)
+    if fence:
+        return fence.group(1).strip()
+    # Find first { ... } block if no fences
+    brace = re.search(r'\{[\s\S]*\}', raw, re.DOTALL)
+    if brace:
+        return brace.group(0).strip()
     return raw.strip()
 
 
@@ -260,7 +265,7 @@ def parse_pdf_statement(
         client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=or_key)
         response = client.chat.completions.create(
             model="google/gemini-2.5-flash",
-            max_tokens=4096,
+            max_tokens=8192,
             messages=[{
                 "role": "user",
                 "content": f"{_PDF_PARSE_PROMPT}\n\nBank statement text:\n{extracted_text[:12000]}",
