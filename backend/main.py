@@ -24,7 +24,7 @@ from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 
 from database import init_db
-from routes import auth_routes, accounts, expenses, income, ai_routes, recurring, rewards
+from routes import auth_routes, accounts, expenses, income, ai_routes, recurring, rewards, goals
 
 load_dotenv()
 
@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="tracey API",
-    version="1.0.0",
+    version="2.0.0",
     description=(
         "Personal finance API for tracey — expense tracking, account management, "
         "loan tracking, reward optimisation, and AI money guidance. "
@@ -105,6 +105,7 @@ app.include_router(income.router,      prefix="/income",   tags=["Income"])
 app.include_router(ai_routes.router,   prefix="/ai",         tags=["AI"])
 app.include_router(recurring.router,   prefix="/recurring",  tags=["Recurring"])
 app.include_router(rewards.router,     prefix="/rewards",    tags=["Rewards"])
+app.include_router(goals.router,       prefix="/goals",       tags=["Goals"])
 
 
 # ---------------------------------------------------------------------------
@@ -120,4 +121,4 @@ def health_check():
     responding.  Does NOT check the database — that would add latency and
     complexity for a check that runs every 30 seconds.
     """
-    return {"status": "ok", "service": "tracey-api", "version": "1.0.0"}
+    return {"status": "ok", "service": "tracey-api", "version": "2.0.0"}

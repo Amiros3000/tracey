@@ -242,11 +242,74 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer style={{ textAlign: 'center', padding: '0 0 40px', color: 'var(--text-secondary)', fontSize: 13 }}>
-        <p style={{ marginBottom: 10 }}>tracey · your money, your rules</p>
-        <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-          <Link href="/privacy" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 600 }}>Privacy</Link>
-          <Link href="/terms" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 600 }}>Terms</Link>
+      <footer style={{
+        borderTop: '1px solid var(--border)',
+        padding: '40px 24px',
+        marginTop: 20,
+      }}>
+        <div style={{ maxWidth: 860, margin: '0 auto' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: 32, marginBottom: 40,
+          }}>
+            {/* Brand */}
+            <div>
+              <TraceyLogo size="sm" />
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.6 }}>
+                Your money, your rules.<br />Private by design.
+              </p>
+            </div>
+
+            {/* Product */}
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>Product</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { href: '/register', label: 'Get started' },
+                  { href: '/login', label: 'Sign in' },
+                ].map(l => (
+                  <Link key={l.href} href={l.href} style={{ fontSize: 13, color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 600 }}>{l.label}</Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Features */}
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>Features</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {['Safe-to-spend', 'Bill tracking', 'Rewards', 'AI insights', 'Savings goals'].map(f => (
+                  <span key={f} style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{f}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Legal */}
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>Legal</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { href: '/privacy', label: 'Privacy policy' },
+                  { href: '/terms', label: 'Terms of use' },
+                ].map(l => (
+                  <Link key={l.href} href={l.href} style={{ fontSize: 13, color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 600 }}>{l.label}</Link>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{
+            borderTop: '1px solid var(--border)', paddingTop: 20,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            flexWrap: 'wrap', gap: 8,
+          }}>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              © {new Date().getFullYear()} tracey · v2.0
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', opacity: 0.6 }}>
+              No subscriptions · No bank connections · No data harvesting
+            </p>
+          </div>
         </div>
       </footer>
     </div>

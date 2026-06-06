@@ -536,3 +536,34 @@ class ExpenseBatchCreate(BaseModel):
 class ExpenseBatchResponse(BaseModel):
     created: int
     expenses: list[ExpenseResponse]
+
+
+# ---------------------------------------------------------------------------
+# Savings goals
+# ---------------------------------------------------------------------------
+
+class GoalCreate(BaseModel):
+    name: str
+    target_amount: float
+    current_amount: float = 0.0
+    target_date: Optional[str] = None
+    linked_account_id: Optional[int] = None
+
+
+class GoalUpdate(BaseModel):
+    name: Optional[str] = None
+    target_amount: Optional[float] = None
+    current_amount: Optional[float] = None
+    target_date: Optional[str] = None
+    linked_account_id: Optional[int] = None
+
+
+class GoalResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    target_amount: float
+    current_amount: float
+    target_date: Optional[str]
+    linked_account_id: Optional[int]
+    created_at: str

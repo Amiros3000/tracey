@@ -13,7 +13,8 @@ import {
 
 interface Expense      { id: number; amount: number; category: string; note: string | null; date: string }
 interface NetWorth     { total_assets: number; total_liabilities: number; net_worth: number }
-interface IncomeSettings { pay_cycle: string; cycle_start_date: string }
+interface IncomeSettings { pay_cycle: string; cycle_start_date: string; savings_target: number }
+interface RecurringItem  { id: number; type: string; amount: number; next_date: string }
 interface Summary      { total: number; by_category: Record<string, number> }
 interface Insight      { text: string; type: 'positive' | 'warning' | 'info' }
 
@@ -47,6 +48,7 @@ export default function DashboardPage() {
   const [insights, setInsights]             = useState<Insight[] | null>(null)
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [hasAccounts, setHasAccounts]       = useState(false)
+  const [upcomingBills, setUpcomingBills]   = useState(0)
   const [streak, setStreak]                 = useState<{ streak: number; today_logged: boolean } | null>(null)
   const [checkedIn, setCheckedIn]           = useState(false)
   const [emailDismissed, setEmailDismissed] = useState(false)
@@ -71,12 +73,13 @@ export default function DashboardPage() {
         const startDate = settings.cycle_start_date || today()
         const endDate   = getCycleEndDate(startDate, settings.pay_cycle as any)
 
-        const [incomeRes, expenseRes, expensesRes, nwRes, streakRes] = await Promise.allSettled([
+        const [incomeRes, expenseRes, expensesRes, nwRes, streakRes, billsRes] = await Promise.allSettled([
           api.get<Summary>(`/income/summary?start_date=${startDate}&end_date=${endDate}`),
           api.get<Summary>(`/expenses/summary?start_date=${startDate}&end_date=${endDate}`),
           api.get<Expense[]>('/expenses?limit=8'),
           api.get<NetWorth>('/accounts/net-worth'),
           api.get<{ streak: number; today_logged: boolean }>('/expenses/streak'),
+          api.get<RecurringItem[]>(`/recurring/upcoming?end_date=${endDate}`),
         ])
 
         if (incomeRes.status  === 'fulfilled') setIncomeTotal(incomeRes.value.total)
@@ -87,6 +90,12 @@ export default function DashboardPage() {
           setHasAccounts(nwRes.value.total_assets > 0 || nwRes.value.total_liabilities > 0)
         }
         if (streakRes.status === 'fulfilled') setStreak(streakRes.value)
+        if (billsRes.status === 'fulfilled') {
+          const total = billsRes.value
+            .filter(r => r.type === 'debit')
+            .reduce((sum, r) => sum + r.amount, 0)
+          setUpcomingBills(total)
+        }
 
         api.get<{ date: string; net_worth: number }[]>('/accounts/net-worth/history?days=90')
           .then(setNwHistory).catch(() => {})
@@ -118,10 +127,12 @@ export default function DashboardPage() {
   const daysLeft        = daysRemainingInCycle(cycleEnd)
   const totalDays       = totalDaysInCycle(cycleStart, cycleEnd)
   const daysElapsed     = totalDays - daysLeft
+  const savingsTarget   = cycleSettings?.savings_target ?? 0
   const hasIncome       = incomeTotal > 0
   const isOverBudget    = hasIncome && expenseTotal > incomeTotal
-  const safePerDay      = hasIncome ? calcSafeToSpend(incomeTotal, expenseTotal, daysLeft) : null
+  const safePerDay      = hasIncome ? calcSafeToSpend(incomeTotal, expenseTotal, daysLeft, upcomingBills, savingsTarget) : null
   const remaining       = Math.max(incomeTotal - expenseTotal, 0)
+  const deductionsTotal = upcomingBills + savingsTarget
 
   if (loading) {
     return (
@@ -156,6 +167,14 @@ export default function DashboardPage() {
               ? `${formatCAD(expenseTotal - incomeTotal)} over budget`
               : `${formatCAD(remaining)} left · ${daysLeft} day${daysLeft !== 1 ? 's' : ''} to go`}
           </p>
+          {!isOverBudget && deductionsTotal > 0 && (
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 4 }}>
+              {[
+                upcomingBills > 0 ? `${formatCAD(upcomingBills)} bills` : null,
+                savingsTarget > 0 ? `${formatCAD(savingsTarget)} savings` : null,
+              ].filter(Boolean).join(' · ')} reserved
+            </p>
+          )}
         </>
       ) : hasCycle ? (
         /* Cycle set but no income logged yet */

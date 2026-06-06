@@ -51,16 +51,16 @@ def get_income_settings(
     The frontend uses these to compute "this cycle" date ranges for summaries.
     """
     rows = db.execute(
-        "SELECT key, value FROM settings WHERE user_id = ? AND key IN (?, ?)",
-        (current_user["id"], "pay_cycle", "cycle_start_date"),
+        "SELECT key, value FROM settings WHERE user_id = ? AND key IN (?, ?, ?)",
+        (current_user["id"], "pay_cycle", "cycle_start_date", "savings_target"),
     ).fetchall()
 
     result = {row["key"]: row["value"] for row in rows}
 
-    # Return defaults in case settings were never seeded (defensive)
     return {
         "pay_cycle":        result.get("pay_cycle", "biweekly"),
         "cycle_start_date": result.get("cycle_start_date", ""),
+        "savings_target":   float(result.get("savings_target", "0") or "0"),
     }
 
 
@@ -77,9 +77,17 @@ def update_income_setting(
     Valid keys: pay_cycle, cycle_start_date
     Uses INSERT OR REPLACE so this works for both initial setup and updates.
     """
-    allowed_keys = {"pay_cycle", "cycle_start_date"}
+    allowed_keys = {"pay_cycle", "cycle_start_date", "savings_target"}
     if key not in allowed_keys:
         raise HTTPException(status_code=400, detail=f"key must be one of {allowed_keys}")
+
+    if key == "savings_target":
+        try:
+            val = float(body.value)
+            if val < 0:
+                raise ValueError
+        except ValueError:
+            raise HTTPException(status_code=400, detail="savings_target must be a non-negative number")
 
     if key == "pay_cycle" and body.value not in _VALID_PAY_CYCLES:
         raise HTTPException(

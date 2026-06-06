@@ -31,14 +31,16 @@ _PATCHABLE = {
 @router.get("/upcoming")
 def get_upcoming(
     days: int = Query(30, ge=1, le=365),
+    end_date: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """
-    Return recurring transactions whose next_date falls within the next N days.
+    Return recurring transactions whose next_date falls within the next N days
+    (or up to end_date if provided).
     Sorted by next_date ascending so the user sees what hits first.
     """
-    cutoff = (date.today() + timedelta(days=days)).isoformat()
+    cutoff = end_date if end_date else (date.today() + timedelta(days=days)).isoformat()
     today  = date.today().isoformat()
 
     rows = db.execute(

@@ -8,6 +8,7 @@ import { api } from '@/lib/api'
 interface PaySettings {
   pay_cycle: string
   cycle_start_date: string
+  savings_target: number
 }
 
 const PAY_CYCLES = [
@@ -46,6 +47,11 @@ export default function SettingsPage() {
   const [savingCycle, setSavingCycle]   = useState(false)
   const [cycleSaved, setCycleSaved]     = useState(false)
 
+  const [savingsTarget, setSavingsTarget]       = useState('')
+  const [savingTarget, setSavingTarget]         = useState(false)
+  const [targetSaved, setTargetSaved]           = useState(false)
+  const [targetError, setTargetError]           = useState('')
+
   const [currentPw, setCurrentPw]       = useState('')
   const [newPw, setNewPw]               = useState('')
   const [confirmPw, setConfirmPw]       = useState('')
@@ -77,6 +83,7 @@ export default function SettingsPage() {
       setPaySettings(s)
       setPayCycle(s.pay_cycle || 'biweekly')
       setCycleStart(s.cycle_start_date || '')
+      setSavingsTarget(s.savings_target > 0 ? String(s.savings_target) : '')
     }).catch(console.error)
   }, [])
 
@@ -93,6 +100,25 @@ export default function SettingsPage() {
       console.error(err)
     } finally {
       setSavingCycle(false)
+    }
+  }
+
+  async function saveTarget() {
+    setTargetError('')
+    const val = parseFloat(savingsTarget)
+    if (savingsTarget !== '' && (isNaN(val) || val < 0)) {
+      setTargetError('Enter a valid amount (0 or more)')
+      return
+    }
+    setSavingTarget(true)
+    try {
+      await api.put('/income/settings/savings_target', { value: String(val || 0) })
+      setTargetSaved(true)
+      setTimeout(() => setTargetSaved(false), 2000)
+    } catch {
+      setTargetError('Failed to save')
+    } finally {
+      setSavingTarget(false)
     }
   }
 
@@ -248,6 +274,29 @@ export default function SettingsPage() {
         </button>
       </div>
 
+      {/* Savings target */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Savings target</p>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
+          Reserve this amount each pay cycle before calculating your safe-to-spend.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-secondary)' }}>$</span>
+          <input
+            type="number" inputMode="decimal" min="0" step="1"
+            value={savingsTarget}
+            onChange={e => setSavingsTarget(e.target.value)}
+            placeholder="0.00"
+            style={{ fontSize: 14, fontFamily: 'ui-monospace, monospace', flex: 1 }}
+          />
+        </div>
+        {targetError  && <p style={{ fontSize: 13, color: 'var(--danger)',  fontWeight: 600, marginBottom: 8 }}>{targetError}</p>}
+        {targetSaved  && <p style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600, marginBottom: 8 }}>✓ Saved</p>}
+        <button className="btn-primary" onClick={saveTarget} disabled={savingTarget} style={{ fontSize: 14 }}>
+          {savingTarget ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+
       {/* Change password */}
       <div className="card" style={{ marginBottom: 20 }}>
         <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>Change password</p>
@@ -310,7 +359,7 @@ export default function SettingsPage() {
       {/* App info */}
       <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>tracey · your money, your rules</p>
-        <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, opacity: 0.6 }}>v1.0 · Phase 2</p>
+        <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, opacity: 0.6 }}>v2.0 · Phase 5</p>
       </div>
 
       {/* Logout */}

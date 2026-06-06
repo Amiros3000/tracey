@@ -74,6 +74,22 @@ const NAV = [
     ),
   },
   {
+    href: '/goals',
+    label: 'Goals',
+    icon: (active: boolean) => (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+        <circle cx="12" cy="12" r="9"
+          stroke={active ? 'var(--primary)' : 'var(--text-secondary)'}
+          strokeWidth="2.2" fill={active ? 'var(--primary-light-bg)' : 'none'} />
+        <circle cx="12" cy="12" r="4.5"
+          stroke={active ? 'var(--primary)' : 'var(--text-secondary)'}
+          strokeWidth="2" />
+        <circle cx="12" cy="12" r="1.5"
+          fill={active ? 'var(--primary)' : 'var(--text-secondary)'} />
+      </svg>
+    ),
+  },
+  {
     href: '/calendar',
     label: 'Calendar',
     icon: (active: boolean) => (
@@ -132,6 +148,8 @@ export default function Sidebar() {
           </svg>
           Settings
         </Link>
+
+        <p style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.45, paddingLeft: 10, marginBottom: 6, letterSpacing: '0.04em' }}>v2.0</p>
 
         <button onClick={handleLogout} style={{
           display: 'flex', alignItems: 'center', gap: 9,

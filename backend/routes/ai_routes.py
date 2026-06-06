@@ -33,11 +33,19 @@ def _or_client() -> OpenAI:
 
 
 def _strip_json_fences(raw: str) -> str:
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```", 2)[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
+    import re
+    # JSON object or array inside code fences, anywhere in the response
+    fence = re.search(r'```(?:json)?\s*([{\[][\s\S]*?[}\]])\s*```', raw, re.DOTALL)
+    if fence:
+        return fence.group(1).strip()
+    # First { ... } block (object)
+    obj = re.search(r'\{[\s\S]*\}', raw, re.DOTALL)
+    if obj:
+        return obj.group(0).strip()
+    # First [ ... ] block (array)
+    arr = re.search(r'\[[\s\S]*\]', raw, re.DOTALL)
+    if arr:
+        return arr.group(0).strip()
     return raw.strip()
 
 
@@ -281,14 +289,16 @@ def lookup_product(
 
     try:
         response = _or_client().chat.completions.create(
-            model="deepseek/deepseek-v4-flash:free",
+            model="google/gemini-2.5-flash",
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = response.choices[0].message.content
         return json.loads(_strip_json_fences(raw))
-    except Exception:
-        raise HTTPException(status_code=500, detail="Could not look up product")
+    except Exception as e:
+        import logging
+        logging.error("Lookup failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Could not look up product: {e}")
 
 
 @router.post("/chat", response_model=ChatResponse)

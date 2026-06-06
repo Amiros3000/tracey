@@ -317,15 +317,15 @@ def get_expense_streak(
     import datetime
 
     expense_rows = db.execute(
-        "SELECT DISTINCT date FROM expenses WHERE user_id = ? ORDER BY date DESC",
+        "SELECT DISTINCT DATE(created_at) AS d FROM expenses WHERE user_id = ? ORDER BY d DESC",
         (current_user["id"],),
     ).fetchall()
     checkin_rows = db.execute(
-        "SELECT DISTINCT date FROM daily_checkins WHERE user_id = ? ORDER BY date DESC",
+        "SELECT DISTINCT date AS d FROM daily_checkins WHERE user_id = ? ORDER BY d DESC",
         (current_user["id"],),
     ).fetchall()
 
-    dates_set = {row["date"] for row in expense_rows} | {row["date"] for row in checkin_rows}
+    dates_set = {row["d"] for row in expense_rows} | {row["d"] for row in checkin_rows}
     today = datetime.date.today()
     today_str = today.isoformat()
     today_logged = today_str in dates_set

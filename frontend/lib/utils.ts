@@ -117,15 +117,17 @@ export function totalDaysInCycle(startDate: string, endDate: string): number {
 
 /**
  * Calculate the safe-to-spend daily amount.
- * safe_to_spend = (income - expenses) / days_remaining
+ * safe_to_spend = (income - expenses - upcoming_bills - savings_target) / days_remaining
  * Returns 0 if the result would be negative (over budget).
  */
 export function calcSafeToSpend(
   income: number,
   expenses: number,
   daysRemaining: number,
+  upcomingBills: number = 0,
+  savingsTarget: number = 0,
 ): number {
-  const remaining = income - expenses
+  const remaining = income - expenses - upcomingBills - savingsTarget
   if (remaining <= 0) return 0
   return remaining / daysRemaining
 }
