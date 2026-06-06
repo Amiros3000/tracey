@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { formatCAD, today } from '@/lib/utils'
 import { useTip } from '@/lib/tips'
+import DateButton from '@/components/DateButton'
 
 interface Recurring {
   id: number
@@ -293,7 +294,7 @@ function AddRecurringModal({ onClose }: { onClose: () => void }) {
 
         <div>
           <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Next date (optional)</label>
-          <input type="date" value={nextDate} onChange={e => setNext(e.target.value)} style={{ fontFamily: 'ui-monospace, monospace' }} />
+          <DateButton value={nextDate} onChange={setNext} placeholder="No date set" />
         </div>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>

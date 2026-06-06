@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import TraceyLogo from '@/components/TraceyLogo'
+import DateButton from '@/components/DateButton'
 import { today } from '@/lib/utils'
 
 const TOTAL_STEPS = 4
@@ -256,11 +257,7 @@ export default function OnboardingPage() {
                   <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
                     When did your last paycheck arrive?
                   </label>
-                  <input
-                    type="date" value={cycleStart}
-                    onChange={e => setCycleStart(e.target.value)}
-                    style={{ fontFamily: 'ui-monospace, monospace' }}
-                  />
+                  <DateButton value={cycleStart} onChange={setCycleStart} placeholder="Pick date" />
                   {cycleStart && (
                     <p style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600, marginTop: 6 }}>
                       Your next pay: {nextPay}

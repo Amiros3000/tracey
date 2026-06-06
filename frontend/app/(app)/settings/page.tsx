@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
+import DateButton from '@/components/DateButton'
 
 interface PaySettings {
   pay_cycle: string
@@ -258,10 +259,7 @@ export default function SettingsPage() {
 
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>When did your last paycheck arrive?</label>
-          <input
-            type="date" value={cycleStart} onChange={e => setCycleStart(e.target.value)}
-            style={{ fontFamily: 'ui-monospace, monospace', fontSize: 14 }}
-          />
+          <DateButton value={cycleStart} onChange={setCycleStart} placeholder="Pick date" />
           {cycleStart && (
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
               Your next pay: <strong style={{ color: 'var(--text-primary)' }}>{calcNextPay(cycleStart, payCycle)}</strong>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { formatCAD, formatDateLong } from '@/lib/utils'
+import DateButton from '@/components/DateButton'
 
 interface Goal {
   id: number
@@ -345,10 +346,10 @@ export default function GoalsPage() {
                 <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
                   Target date <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span>
                 </label>
-                <input
-                  type="date" value={form.target_date}
-                  onChange={e => setForm(f => ({ ...f, target_date: e.target.value }))}
-                  style={{ fontFamily: 'ui-monospace, monospace', fontSize: 14 }}
+                <DateButton
+                  value={form.target_date}
+                  onChange={val => setForm(f => ({ ...f, target_date: val }))}
+                  placeholder="No target date"
                 />
               </div>
 
