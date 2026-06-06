@@ -33,25 +33,68 @@ interface Settings {
   cycle_start_date: string
 }
 
+type PayCycle = 'weekly' | 'biweekly' | 'semimonthly' | 'monthly'
+
+function cycleLengthDays(cycle: PayCycle): number {
+  return cycle === 'weekly' ? 7 : cycle === 'biweekly' ? 14 : cycle === 'semimonthly' ? 15 : 30
+}
+
+function shiftCycle(start: string, cycle: PayCycle, direction: -1 | 1): string {
+  const d = new Date(start + 'T00:00:00')
+  if (cycle === 'semimonthly') {
+    if (direction === -1) {
+      if (d.getDate() > 15) { d.setDate(1) }
+      else { d.setMonth(d.getMonth() - 1); d.setDate(16) }
+    } else {
+      if (d.getDate() <= 15) { d.setDate(16) }
+      else { d.setMonth(d.getMonth() + 1); d.setDate(1) }
+    }
+  } else {
+    const days = cycleLengthDays(cycle)
+    d.setDate(d.getDate() + direction * days)
+  }
+  return d.toISOString().split('T')[0]
+}
+
+function fmt(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+}
+
 export default function OverviewPage() {
   const { visible: tipVisible, dismiss: dismissTip } = useTip('spending')
   const [settings, setSettings]   = useState<Settings | null>(null)
   const [expenses, setExpenses]   = useState<Summary | null>(null)
   const [income, setIncome]       = useState<IncomeSummary | null>(null)
   const [loading, setLoading]     = useState(true)
+  const [cycleOffset, setCycleOffset] = useState(0) // 0 = current, -1 = prev, etc.
+  const [customRange, setCustomRange] = useState(false)
 
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate]     = useState('')
+  const [baseStart, setBaseStart] = useState('') // current cycle start
 
   useEffect(() => {
     api.get<Settings>('/income/settings').then(s => {
       setSettings(s)
       const start = s.cycle_start_date || today()
-      const end   = getCycleEndDate(start, s.pay_cycle as 'weekly' | 'biweekly' | 'semimonthly' | 'monthly')
+      setBaseStart(start)
+      const end = getCycleEndDate(start, s.pay_cycle as PayCycle)
       setStartDate(start)
       setEndDate(end)
     })
   }, [])
+
+  // Recompute dates when cycle offset changes
+  useEffect(() => {
+    if (!settings || !baseStart || customRange) return
+    const cycle = settings.pay_cycle as PayCycle
+    let start = baseStart
+    for (let i = 0; i < Math.abs(cycleOffset); i++) {
+      start = shiftCycle(start, cycle, cycleOffset < 0 ? -1 : 1)
+    }
+    setStartDate(start)
+    setEndDate(getCycleEndDate(start, cycle))
+  }, [cycleOffset, baseStart, settings, customRange])
 
   useEffect(() => {
     if (!startDate || !endDate) return
@@ -101,25 +144,78 @@ export default function OverviewPage() {
       )}
 
       {/* Date range selector */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-        <div style={{ flex: 1 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>From</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={e => setStartDate(e.target.value)}
-            style={{ fontSize: 14, fontFamily: 'ui-monospace, monospace' }}
-          />
-        </div>
-        <div style={{ flex: 1 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>To</label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={e => setEndDate(e.target.value)}
-            style={{ fontSize: 14, fontFamily: 'ui-monospace, monospace' }}
-          />
-        </div>
+      <div className="card" style={{ marginBottom: 16, padding: '12px 14px' }}>
+        {!customRange ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <button
+              onClick={() => setCycleOffset(o => o - 1)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: 8, color: 'var(--text-secondary)', fontSize: 18, lineHeight: 1, fontFamily: 'Nunito, sans-serif' }}
+            >‹</button>
+            <div style={{ textAlign: 'center', flex: 1 }}>
+              <p className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                {startDate && endDate ? `${fmt(startDate)} – ${fmt(endDate)}` : '—'}
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                {cycleOffset === 0 ? 'Current cycle' : cycleOffset === -1 ? 'Previous cycle' : `${Math.abs(cycleOffset)} cycles ago`}
+                {' · '}
+                <button
+                  onClick={() => { setCustomRange(true) }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--primary)', fontWeight: 700, padding: 0, fontFamily: 'Nunito, sans-serif' }}
+                >
+                  Custom
+                </button>
+              </p>
+            </div>
+            <button
+              onClick={() => setCycleOffset(o => Math.min(o + 1, 0))}
+              disabled={cycleOffset >= 0}
+              style={{ background: 'none', border: 'none', cursor: cycleOffset >= 0 ? 'default' : 'pointer', padding: '6px 10px', borderRadius: 8, color: cycleOffset >= 0 ? 'var(--border)' : 'var(--text-secondary)', fontSize: 18, lineHeight: 1, fontFamily: 'Nunito, sans-serif' }}
+            >›</button>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>From</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--surface)', borderRadius: 10, padding: '8px 12px', cursor: 'pointer' }}
+                  onClick={() => {
+                    const d = document.getElementById('ov-start') as HTMLInputElement
+                    d?.showPicker?.()
+                  }}
+                >
+                  <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {startDate ? fmt(startDate) : 'Pick date'}
+                  </span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="2.5" stroke="var(--text-secondary)" strokeWidth="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round"/></svg>
+                  <input id="ov-start" type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>To</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--surface)', borderRadius: 10, padding: '8px 12px', cursor: 'pointer' }}
+                  onClick={() => {
+                    const d = document.getElementById('ov-end') as HTMLInputElement
+                    d?.showPicker?.()
+                  }}
+                >
+                  <span className="mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {endDate ? fmt(endDate) : 'Pick date'}
+                  </span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="2.5" stroke="var(--text-secondary)" strokeWidth="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round"/></svg>
+                  <input id="ov-end" type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => { setCustomRange(false); setCycleOffset(0) }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, padding: 0, fontFamily: 'Nunito, sans-serif' }}
+            >
+              ← Back to cycle view
+            </button>
+          </div>
+        )}
       </div>
 
       {loading ? (
