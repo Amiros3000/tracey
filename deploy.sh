@@ -3,9 +3,9 @@
 
 set -e
 
-HOST="amir@5.161.70.14"
+HOST="${TRACEY_HOST:?Set TRACEY_HOST, e.g. user@your.server.ip}"
 SSH="ssh -i ~/.ssh/id_ed25519"
-REMOTE_DIR="/home/amir/backend"
+REMOTE_DIR="${TRACEY_REMOTE_DIR:?Set TRACEY_REMOTE_DIR, e.g. /home/user/backend}"
 LOCAL_ENV="./backend/.env"
 
 echo "→ Syncing code..."
